@@ -6,14 +6,18 @@ var fs = require('fs')
   , pkginfo = require('pkginfo')(module)
   , request = require('request')
   , optimist = require('optimist')
+  , path = require('path')
   ;
 
 var argv = optimist
-    .usage('reggie publish             --> Publish current module (from module root)\n' +
-           'reggie info <package_name> --> Show JSON info about a particular package')
-    .default({ u: 'http://127.0.0.1:8080'})
+    .usage('reggie publish               --> Publish current module (from module root)\n' +
+           'reggie info <package_name>   --> Show JSON info about a particular package\n' +
+           'reggie mirror <package_name> --> Publish an existing NPM package from https://registry.npmjs.org/')
+    .default({u: 'http://127.0.0.1:8080'})
     .describe('u', 'The base URL of the Reggie server (e.g. http://reggie:8080)')
+    .describe('p', 'The URL of your proxy server (nice when inside corporate network, e.g. http://proxy.intra.net/)')
     .alias('u', 'url')
+    .alias('p', 'proxy')
     .demand(['u'])
     .argv;
 
@@ -25,7 +29,14 @@ if (argv.h) {
 argv.command = argv._[0];
 argv.param1 = argv._[1];
 
-var rootUrl = process.argv[3] || 'http://127.0.0.1:8080';
+/* Use proxy? */
+if(argv.proxy) {
+  request = request.defaults({ proxy: argv.proxy, strictSSL: false });
+}
+
+
+var rootUrl = argv.url;
+
 
 if (argv.command === 'publish') {
   npm.load(null, function (err) {
@@ -60,14 +71,21 @@ else if (argv.command === 'info' && argv.param1) {
     uri: url,
     json: true
   }, handleDataResponse)
-}  
+}
 else if (argv.command === 'index') {
   var url = argv.url + '/index';
   request({
     uri: url,
     json: true
   }, handleDataResponse)
-}  
+}
+else if (argv.command === 'mirror' && argv.param1) {
+  var npmPackage = argv.param1
+      , mirror = require('./lib/mirror')
+      , version;
+
+  mirror(npmPackage, version, argv.url, request);
+}
 else {
   optimist.showHelp();
 }
